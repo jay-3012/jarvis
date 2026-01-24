@@ -3,51 +3,41 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import asyncio
-import sys
-from utils.logging import configure_logging
-from core.config import global_settings
-from core.event_bus import internal_bus
 import structlog
+import flet as ft
+from core.config import global_settings
+from layers.conversational.voice_manager import VoiceManager
+from utils.logging import configure_logging
+from ui.main_window import JarvisUI
 
 configure_logging()
 logger = structlog.get_logger()
 
-async def main():
-    """
-    Main entry point for Jarvis.
-    """
-    logger.info("Starting Jarvis...", version="0.1.0", env="development" if global_settings.DEBUG else "production")
-    
+async def start_voice_loop():
+    """Background task for voice manager."""
+    logger.info("Starting Voice Loop in background...")
     try:
-        # Initialize Layers
-        logger.info("Initializing layers...")
-        
-        # Phase 1: Voice Layer
-        logger.info("Importing VoiceManager...")
-        from layers.conversational.voice_manager import VoiceManager
-        logger.info("Instantiating VoiceManager...")
-        voice_manager = VoiceManager()
-        logger.info("Initializing VoiceManager instance...")
-        await voice_manager.initialize()
-        
-        await voice_manager.speak("Jarvis is online and listening.")
-        
-        # Start listening in background
-        listen_task = asyncio.create_task(voice_manager.listen_loop())
-        
-        logger.info("Jarvis System Initialized. Waiting for events...")
-        
-        # Keep process alive and monitor loop
-        await listen_task
-            
-    except KeyboardInterrupt:
-        logger.info("Shutdown signal received.")
+        vm = VoiceManager()
+        await vm.initialize()
+        await vm.listen_loop()
     except Exception as e:
-        logger.fatal("Critical system failure", error=str(e))
-        sys.exit(1)
+        logger.error("Voice Loop Crashed", error=str(e))
+
+async def main(page: ft.Page):
+    """Flet Entry Point."""
+    logger.info("Initializing UI...")
+    
+    # 1. Initialize UI
+    ui = JarvisUI(page)
+    
+    # 2. Start Voice Loop in Background
+    # page.run_task allows running an async task within Flet's loop
+    page.run_task(start_voice_loop)
 
 if __name__ == "__main__":
+    logger.info("Starting JARVIS System (UI Mode)...")
     try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+        # ft.app runs the main event loop
+        ft.app(target=main)
+    except Exception as e:
+        logger.error("Application Crash", error=str(e))

@@ -29,22 +29,23 @@ class Pyttsx3TTS(TTSProvider):
 
     def _speak_sync(self, text: str):
         """Synchronous speak function for threading."""
-        if not self._engine:
-            self._engine = self._init_engine()
-        
+        engine = None
         try:
-            # We must use runAndWait so that it plays. 
-            # Note: pyttsx3 event loop behavior can be tricky.
-            # Ideally, we create a new engine per utterance or maintain a dedicated thread.
-            # Using a simple one-off for now.
-            logger.info("Speaking...", text=text)
-            self._engine.say(text)
-            self._engine.runAndWait()
+            # Re-initialize engine every time to avoid loop conflicts in threaded env
+            engine = self._init_engine()
+            logger.info("Speaking...", text=text[:50]) # Log first 50 chars
+            engine.say(text)
+            engine.runAndWait()
         except Exception as e:
             logger.error("TTS failed", error=str(e))
-            # On error, try to reset engine
-            self._engine = None 
             raise ComponentException(f"TTS Failed: {e}", FailureType.TRANSIENT)
+        finally:
+            if engine:
+                try:
+                    engine.stop()
+                    del engine
+                except Exception:
+                    pass
 
     async def synthesize(self, text: str) -> None:
         """Speak the text."""

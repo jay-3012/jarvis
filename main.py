@@ -24,15 +24,15 @@ async def start_voice_loop():
         logger.error("Voice Loop Crashed", error=str(e))
 
 import threading
-from api.server import start_api_server
+# from api.server import start_api_server
 
 async def main(page: ft.Page):
     """Flet Entry Point."""
     logger.info("Initializing UI...")
     
     # 0. Start API Server in Background Thread
-    api_thread = threading.Thread(target=start_api_server, kwargs={"host": "0.0.0.0", "port": 8000}, daemon=True)
-    api_thread.start()
+    # api_thread = threading.Thread(target=start_api_server, kwargs={"host": "0.0.0.0", "port": 8000}, daemon=True)
+    # api_thread.start()
 
     # 1. Initialize UI
     ui = JarvisUI(page)

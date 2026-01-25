@@ -1,46 +1,50 @@
+# layers/conversational/voice_manager.py (REFACTORED)
+
 import asyncio
 import structlog
 import speech_recognition as sr
-import io
 import tempfile
 import os
-import random
-import re
 
 from core.event_bus import internal_bus
 from layers.conversational.stt import WhisperSTT
 from layers.conversational.tts import Pyttsx3TTS
-from layers.intelligence.ollama_llm import OllamaLLM
+from layers.dialogue.manager import DialogueManager, ResponseType  # NEW
 from layers.skills.app_launcher import AppLauncher
 from layers.skills.system_commander import SystemCommander
 from layers.skills.git_controller import GitController
 from layers.skills.code_assistant import CodeAssistant
 from layers.skills.file_searcher import FileSearcher
-from layers.skills.todo_controller import TodoController
 
 logger = structlog.get_logger()
 
 class VoiceManager:
     """
     Manages the voice interaction loop:
-    Listen (Microphone) -> Detect (VAD/Wake) -> Transcribe (STT) -> Speak (TTS)
+    Listen (Microphone) -> Transcribe (STT) -> DialogueManager -> Execute -> Speak (TTS)
+    
+    REFACTORED: Now delegates conversational logic to DialogueManager
     """
     def __init__(self):
         self.stt = WhisperSTT()
         self.tts = Pyttsx3TTS()
-        self.llm = OllamaLLM()
-        self.app_launcher = AppLauncher()
-        self.system_commander = SystemCommander()
-        self.git_controller = GitController()
-        self.code_assistant = CodeAssistant()
-        self.file_searcher = FileSearcher()
-        self.todo_controller = TodoController()
+        self.dialogue_manager = DialogueManager()  # NEW: Dialogue logic separated
+        
+        # Skills
+        self.skills = {
+            'OPEN': AppLauncher(),
+            'CMD': SystemCommander(),
+            'GIT': GitController(),
+            'CODE': CodeAssistant(),
+            'SEARCH': FileSearcher(),
+        }
+        
         self.recognizer = sr.Recognizer()
         self.is_running = False
         
         # Adjust for ambient noise
         self.recognizer.dynamic_energy_threshold = True
-        self.recognizer.energy_threshold = 300  # Default, will adjust
+        self.recognizer.energy_threshold = 300
 
     async def initialize(self):
         """Initialize models and hardware."""
@@ -67,8 +71,7 @@ class VoiceManager:
         await internal_bus.publish("status_update", {"status": "thinking"})
 
         try:
-            # For now, assume text/code files
-            # TODO: Add logic for images if needed
+            # Read file content
             if os.path.getsize(file_path) > 100000:
                 content = "File too large to read entirely. Reading first 5000 characters."
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -79,11 +82,13 @@ class VoiceManager:
 
             prompt = f"I have absorbed a file named '{os.path.basename(file_path)}'. Here is its content:\n\n{content}\n\nPlease analyze this file and tell me what it does or contains."
             
-            # Send to LLM
-            response = await self.llm.generate_response(prompt)
+            # Use DialogueManager
+            response_data = await self.dialogue_manager.process_user_input(prompt)
             
-            await self.speak(response)
-            await internal_bus.publish("assistant_message", {"text": f"Analysis of {os.path.basename(file_path)}:\n{response}"})
+            await self.speak(response_data['text'])
+            await internal_bus.publish("assistant_message", {
+                "text": f"Analysis of {os.path.basename(file_path)}:\n{response_data['text']}"
+            })
 
         except Exception as e:
             err_msg = f"Failed to analyze file: {str(e)}"
@@ -98,44 +103,36 @@ class VoiceManager:
         await self.tts.synthesize(text)
         await internal_bus.publish("status_update", {"status": "idle"})
 
-    async def _play_listening_cue(self):
-        """Verbal cue to indicate listen state."""
-        # We can add variety here to make it more natural
-        prompts = [
-            "I am waiting for your command.",
-            "Listening.",
-            "Go ahead.",
-            "Status ready. Waiting for input."
-        ]
-        await self.speak(random.choice(prompts))
-
     async def listen_loop(self):
         """
         Continuous listening loop.
         1. Listen for audio segment.
         2. Transcribe.
-        3. Publish 'user_message' event.
+        3. Process with DialogueManager.
+        4. Execute tools or speak response.
         """
         self.is_running = True
         logger.info("Starting listening loop...")
         
+        # Initial greeting
+        await self.speak("Jarvis online. How can I help?")
+        
         while self.is_running:
             try:
-                await self._play_listening_cue()
                 await internal_bus.publish("status_update", {"status": "listening"})
                 audio_data = await self._listen_one_shot()
+                
                 if audio_data:
-                     # Thinking/Processing
-                     await internal_bus.publish("status_update", {"status": "thinking"})
-                     # Save temporarily to disk for Whisper (easier than in-memory for now)
-                     # faster-whisper accepts file paths.
-                     text = await self._process_audio(audio_data)
-                     
-                     if text:
-                         # Publish event
-                         await internal_bus.publish("user_message", {"text": text, "source": "voice"})
-                         
-                         await self._handle_conversation(text)
+                    # Thinking/Processing
+                    await internal_bus.publish("status_update", {"status": "thinking"})
+                    text = await self._process_audio(audio_data)
+                    
+                    if text:
+                        # Publish user message
+                        await internal_bus.publish("user_message", {"text": text, "source": "voice"})
+                        
+                        # Process with DialogueManager
+                        await self._handle_conversation(text)
 
             except Exception as e:
                 logger.error("Error in listening loop", error=str(e))
@@ -146,18 +143,17 @@ class VoiceManager:
         loop = asyncio.get_event_loop()
         with sr.Microphone() as source:
             logger.debug("Listening...")
-            # We use a shorter timeout to allow checking is_running
             try:
-                # running listen in thread to avoid blocking main loop
-                # timeout=8: Wait 8 seconds for speech. If silence, loop repeats and speaks cue again.
-                audio = await loop.run_in_executor(None, lambda: self.recognizer.listen(source, timeout=8, phrase_time_limit=10))
+                audio = await loop.run_in_executor(
+                    None, 
+                    lambda: self.recognizer.listen(source, timeout=8, phrase_time_limit=10)
+                )
                 return audio
             except sr.WaitTimeoutError:
                 return None
 
     async def _process_audio(self, audio: sr.AudioData) -> str:
         """Process raw audio to text."""
-        # Save to temp file
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp.write(audio.get_wav_data())
             tmp_path = tmp.name
@@ -170,87 +166,81 @@ class VoiceManager:
                 os.remove(tmp_path)
 
     async def _handle_conversation(self, text: str):
-        """Handle inputs with LLM and Skills."""
+        """
+        Handle user input with DialogueManager.
+        REFACTORED: Now uses DialogueManager for all conversational logic.
+        """
         if not text:
             return
+            
         logger.info(f"User said: {text}")
         
-        # Hardcoded commands for control
+        # Hardcoded system control commands
         if "stop voice" in text.lower() or "shutdown system" in text.lower():
             await self.speak("Shutting down voice loop.")
             self.stop()
             return
-
-        # Thinking Logic
-        await internal_bus.publish("status_update", {"status": "thinking"})
         
-        # Send to LLM
-        response = await self.llm.generate_response(text)
+        # Process through DialogueManager
+        response_data = await self.dialogue_manager.process_user_input(text)
         
-        # Check for commands
-        open_match = re.search(r"\[\[OPEN:\s*(.*?)\]\]", response, re.IGNORECASE)
-        cmd_match = re.search(r"\[\[CMD:\s*(.*?)\]\]", response, re.IGNORECASE)
-        git_match = re.search(r"\[\[GIT:\s*(.*?)\]\]", response, re.IGNORECASE)
-        code_match = re.search(r"\[\[CODE:\s*(.*?)\]\]", response, re.IGNORECASE)
-        search_match = re.search(r"\[\[SEARCH:\s*(.*?)\]\]", response, re.IGNORECASE)
-        todo_match = re.search(r"\[\[TODO:\s*(.*?)\]\]", response, re.IGNORECASE)
+        # Handle based on response type
+        if response_data['response_type'] == ResponseType.EXECUTE:
+            # Execute tools first
+            for tool_call in response_data['tool_calls']:
+                await self._execute_tool(tool_call)
+            
+            # Then speak response
+            if response_data['text']:
+                await self.speak(response_data['text'])
+                await internal_bus.publish("assistant_message", {"text": response_data['text']})
         
-        if open_match:
-            app_name = open_match.group(1)
-            logger.info(f"Detected OPEN command: {app_name}")
-            result = await self.app_launcher.execute({"app_name": app_name})
-            await self.speak(result)
-            await internal_bus.publish("assistant_message", {"text": f"Opened {app_name}"})
-            
-        elif cmd_match:
-            command = cmd_match.group(1)
-            logger.info(f"Detected CMD command: {command}")
-            await self.speak(f"Executing system command: {command}")
-            result = await self.system_commander.execute({"command": command})
-            await self.speak(result)
-            await internal_bus.publish("assistant_message", {"text": f"Executed: {command}"})
-
-        elif git_match:
-            command = git_match.group(1)
-            logger.info(f"Detected GIT command: {command}")
-            await self.speak("Executing Git command...")
-            result = await self.git_controller.execute({"command": command})
-            await self.speak(result)
-            await internal_bus.publish("assistant_message", {"text": f"Git: {command}"})
-
-        elif code_match:
-            command = code_match.group(1)
-            logger.info(f"Detected CODE command: {command}")
-            # Do not announce always if it's just reading, but maybe briefly
-            result = await self.code_assistant.execute({"command": command})
-            await self.speak(result)
-            await internal_bus.publish("assistant_message", {"text": f"Code Operation Complete"})
-
-        elif search_match:
-            command = search_match.group(1)
-            logger.info(f"Detected SEARCH command: {command}")
-            await self.speak("Searching for files...")
-            result = await self.file_searcher.execute({"command": command})
-            await self.speak(result)
-            await internal_bus.publish("assistant_message", {"text": f"Search Results: {result}"})
-            
-
-
-        elif todo_match:
-            task_content = todo_match.group(1)
-            logger.info(f"Detected TODO command: {task_content}")
-            await self.speak(f"Adding task: {task_content}")
-            result = await self.todo_controller.execute({"task_content": task_content})
-            await self.speak("Task added to your list.")
-            await internal_bus.publish("assistant_message", {"text": f"Todo: {task_content}"})
-            
-        else:
-            # Just speak response
-            await self.speak(response)
-            await internal_bus.publish("assistant_message", {"text": response})
-
-        # Back into listening handled by loop, but we can set status to idle briefly
+        elif response_data['response_type'] == ResponseType.CONFIRM:
+            # Ask for confirmation
+            await self.speak(response_data['text'])
+            await internal_bus.publish("assistant_message", {"text": response_data['text']})
+        
+        elif response_data['response_type'] == ResponseType.CLARIFY:
+            # Request clarification
+            await self.speak(response_data['text'])
+            await internal_bus.publish("assistant_message", {"text": response_data['text']})
+        
+        else:  # ACKNOWLEDGE, UPDATE, ERROR
+            # Just speak
+            await self.speak(response_data['text'])
+            await internal_bus.publish("assistant_message", {"text": response_data['text']})
+        
         await internal_bus.publish("status_update", {"status": "idle"})
+
+    async def _execute_tool(self, tool_call):
+        """Execute a single tool call"""
+        skill = self.skills.get(tool_call.tool_name)
+        
+        if not skill:
+            logger.warning(f"Unknown tool: {tool_call.tool_name}")
+            return
+        
+        logger.info(f"Executing tool: {tool_call.tool_name}", args=tool_call.arguments)
+        
+        try:
+            # Map tool arguments to skill parameters
+            if tool_call.tool_name == 'OPEN':
+                result = await skill.execute({"app_name": tool_call.arguments})
+            elif tool_call.tool_name == 'CMD':
+                result = await skill.execute({"command": tool_call.arguments})
+            elif tool_call.tool_name == 'GIT':
+                result = await skill.execute({"command": tool_call.arguments})
+            elif tool_call.tool_name == 'CODE':
+                result = await skill.execute({"command": tool_call.arguments})
+            elif tool_call.tool_name == 'SEARCH':
+                result = await skill.execute({"command": tool_call.arguments})
+            
+            # Speak result
+            await self.speak(result)
+            
+        except Exception as e:
+            logger.error(f"Tool execution failed: {tool_call.tool_name}", error=str(e))
+            await self.speak(f"Failed to execute {tool_call.tool_name}: {str(e)}")
 
     def stop(self):
         self.is_running = False

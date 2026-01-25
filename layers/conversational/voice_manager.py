@@ -16,6 +16,7 @@ from layers.skills.system_commander import SystemCommander
 from layers.skills.git_controller import GitController
 from layers.skills.code_assistant import CodeAssistant
 from layers.skills.file_searcher import FileSearcher
+from layers.skills.todo_controller import TodoController
 
 logger = structlog.get_logger()
 
@@ -33,6 +34,7 @@ class VoiceManager:
         self.git_controller = GitController()
         self.code_assistant = CodeAssistant()
         self.file_searcher = FileSearcher()
+        self.todo_controller = TodoController()
         self.recognizer = sr.Recognizer()
         self.is_running = False
         
@@ -191,6 +193,7 @@ class VoiceManager:
         git_match = re.search(r"\[\[GIT:\s*(.*?)\]\]", response, re.IGNORECASE)
         code_match = re.search(r"\[\[CODE:\s*(.*?)\]\]", response, re.IGNORECASE)
         search_match = re.search(r"\[\[SEARCH:\s*(.*?)\]\]", response, re.IGNORECASE)
+        todo_match = re.search(r"\[\[TODO:\s*(.*?)\]\]", response, re.IGNORECASE)
         
         if open_match:
             app_name = open_match.group(1)
@@ -230,6 +233,16 @@ class VoiceManager:
             result = await self.file_searcher.execute({"command": command})
             await self.speak(result)
             await internal_bus.publish("assistant_message", {"text": f"Search Results: {result}"})
+            
+
+
+        elif todo_match:
+            task_content = todo_match.group(1)
+            logger.info(f"Detected TODO command: {task_content}")
+            await self.speak(f"Adding task: {task_content}")
+            result = await self.todo_controller.execute({"task_content": task_content})
+            await self.speak("Task added to your list.")
+            await internal_bus.publish("assistant_message", {"text": f"Todo: {task_content}"})
             
         else:
             # Just speak response

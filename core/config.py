@@ -29,6 +29,7 @@ class Settings(BaseSettings):
         "3. Git Control: [[GIT: command]]. Example: 'Commit changes' -> '[[GIT: commit -m \"update\"]]'. "
         "4. Code Ops: [[CODE: action args]]. Example: 'Read main.py' -> '[[CODE: read main.py]]'. "
         "5. File Search: [[SEARCH: pattern path]]. Example: 'Find PDF in docs' -> '[[SEARCH: *.pdf C:/Users/vishw/Documents]]'. "
+        "6. Todo List: [[TODO: task_content]]. Example: 'Remind me to buy milk' -> '[[TODO: Buy milk]]'. "
         "Otherwise, reply normally."
     )
     STT_MODEL: str = "base"

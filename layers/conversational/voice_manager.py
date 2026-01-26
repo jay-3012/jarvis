@@ -9,7 +9,8 @@ import os
 from core.event_bus import internal_bus
 from layers.conversational.stt import WhisperSTT
 from layers.conversational.tts import Pyttsx3TTS
-from layers.dialogue.manager import DialogueManager, ResponseType  # NEW
+from layers.conversational.tts_sherpa import SherpaTTS # NEW
+from layers.dialogue.manager import DialogueManager, ResponseType
 from layers.skills.app_launcher import AppLauncher
 from layers.skills.system_commander import SystemCommander
 from layers.skills.git_controller import GitController
@@ -22,13 +23,17 @@ class VoiceManager:
     """
     Manages the voice interaction loop:
     Listen (Microphone) -> Transcribe (STT) -> DialogueManager -> Execute -> Speak (TTS)
-    
-    REFACTORED: Now delegates conversational logic to DialogueManager
     """
     def __init__(self):
         self.stt = WhisperSTT()
-        self.tts = Pyttsx3TTS()
-        self.dialogue_manager = DialogueManager()  # NEW: Dialogue logic separated
+        
+        # Select TTS Engine
+        if global_settings.TTS_ENGINE == "offline_neural":
+            self.tts = SherpaTTS()
+        else:
+            self.tts = Pyttsx3TTS()
+            
+        self.dialogue_manager = DialogueManager()
         
         # Skills
         self.skills = {
@@ -159,7 +164,7 @@ class VoiceManager:
             tmp_path = tmp.name
         
         try:
-            text = await self.stt.transcribe(tmp_path)
+            text = await self.stt.transcribe(tmp_path, language=global_settings.LANGUAGE)
             return text
         finally:
             if os.path.exists(tmp_path):

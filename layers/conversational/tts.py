@@ -22,6 +22,43 @@ class Pyttsx3TTS(TTSProvider):
             engine = pyttsx3.init()
             engine.setProperty('rate', self.rate)
             engine.setProperty('volume', self.volume)
+            
+            # Select Voice based on Config
+            voices = engine.getProperty('voices')
+            selected_voice = None
+            
+            # 1. Try specific VOICE_ID from config
+            if global_settings.VOICE_ID:
+                for v in voices:
+                    if v.id == global_settings.VOICE_ID:
+                        selected_voice = v.id
+                        break
+            
+            # 2. Try matching LANGUAGE from config (e.g., 'hi' for Hindi)
+            if not selected_voice and global_settings.LANGUAGE:
+                search_term = "hindi" if global_settings.LANGUAGE == "hi" else global_settings.LANGUAGE
+                for v in voices:
+                    # Check name and languages list
+                    if search_term.lower() in v.name.lower():
+                        selected_voice = v.id
+                        break
+                        
+                    # Check v.languages if it exists (it's a list)
+                    try:
+                        for lang in v.languages:
+                            if search_term.lower() in str(lang).lower():
+                                selected_voice = v.id
+                                break
+                    except: 
+                        pass
+                    if selected_voice: break
+
+            if selected_voice:
+                engine.setProperty('voice', selected_voice)
+                logger.info("TTS Voice Set", voice=selected_voice)
+            else:
+                logger.warning("Requested voice not found, using default.")
+
             return engine
         except Exception as e:
             logger.error("Failed to initialize pyttsx3", error=str(e))

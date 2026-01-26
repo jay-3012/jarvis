@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     SYSTEM_PROMPT: str = (
         "You are Jarvis, a highly intelligent and helpful AI assistant. "
         "Keep your answers concise and human-like. "
+        "Reply in the language matching the user's input or the system language (Hindi/English). "
         "Do not use markdown formatting like bold or headers in your speech. "
         "TOOLS: "
         "1. Open Apps: [[OPEN: app_name]]. "
@@ -33,5 +34,8 @@ class Settings(BaseSettings):
         "Otherwise, reply normally."
     )
     STT_MODEL: str = "base"
+    LANGUAGE: str = "hi"
+    VOICE_ID: str = "" # Optional: Specific voice ID
+    TTS_ENGINE: str = "offline_neural" # offline_os, offline_neural, online
     
 global_settings = Settings()

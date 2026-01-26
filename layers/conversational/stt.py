@@ -38,7 +38,7 @@ class WhisperSTT(STTProvider):
             logger.error("Failed to load Whisper model", error=str(e))
             raise ComponentException(f"STT Model Load Failed: {e}", FailureType.FATAL)
 
-    async def transcribe(self, audio_data: Any) -> str:
+    async def transcribe(self, audio_data: Any, language: str = None) -> str:
         """
         Transcribe audio data (bytes or path).
         For SpeechRecognition AudioData, we might need to process it.
@@ -47,7 +47,7 @@ class WhisperSTT(STTProvider):
         if not self._model:
              await self.initialize()
 
-        logger.info("Transcribing audio...")
+        logger.info("Transcribing audio...", language=language)
         try:
             # We assume audio_data is a file path or a binary stream acceptable by transcribe
             # faster-whisper accepts: file-like object, numpy array, or path
@@ -55,7 +55,8 @@ class WhisperSTT(STTProvider):
             segments, info = await asyncio.to_thread(
                 self._model.transcribe, 
                 audio_data, 
-                beam_size=5
+                beam_size=5,
+                language=language # Pass language constraint
             )
             
             text = " ".join([segment.text for segment in segments])

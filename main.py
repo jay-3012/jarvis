@@ -47,4 +47,8 @@ if __name__ == "__main__":
         # ft.app runs the main event loop
         ft.app(target=main)
     except Exception as e:
-        logger.error("Application Crash", error=str(e))
+        if "ConnectionResetError" in str(e) or "WinError 10054" in str(e):
+             # Ignore standard Flet shutdown noise on Windows
+             pass
+        else:
+            logger.error("Application Crash", error=str(e))

@@ -1,17 +1,11 @@
+# Server-only dependencies (for Docker container)
+# Excludes desktop-specific packages (flet, pyaudio, opencv, mediapipe, pyautogui)
+
+# Core
 aiohttp==3.9.3
 pydantic==2.6.1
 structlog==24.1.0
 python-dotenv==1.0.1
-faster-whisper==1.0.0
-pyttsx3==2.90
-SpeechRecognition==3.10.1
-pyaudio==0.2.14
-ollama==0.1.6
-flet==0.24.1
-opencv-python
-mediapipe
-pyautogui
-pillow
 
 # Central Server
 fastapi==0.109.0
@@ -36,3 +30,6 @@ passlib[bcrypt]==1.7.4
 # Utilities
 pydantic-settings==2.1.0
 httpx==0.25.2
+
+# LLM
+ollama==0.1.6

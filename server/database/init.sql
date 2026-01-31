@@ -20,8 +20,8 @@ CREATE TABLE IF NOT EXISTS devices (
     device_type VARCHAR(20) NOT NULL CHECK (device_type IN ('desktop', 'mobile', 'browser')),
     capabilities JSONB DEFAULT '{}'::jsonb,
     last_seen TIMESTAMP,
-    status VARCHAR(20) DEFAULT 'offline' CHECK (status IN ('online', 'offline', 'away')),
-    metadata JSONB DEFAULT '{}'::jsonb,
+    status VARCHAR(20) DEFAULT 'offline' CHECK (status IN ('online', 'offline', 'away', 'pending')),
+    device_metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     started_at TIMESTAMP DEFAULT NOW(),
     last_message_at TIMESTAMP,
     device_id VARCHAR(100),
-    metadata JSONB DEFAULT '{}'::jsonb
+    conversation_metadata JSONB DEFAULT '{}'::jsonb
 );
 
 -- Create messages table
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS messages (
     speaker VARCHAR(20) NOT NULL CHECK (speaker IN ('user', 'assistant', 'system')),
     content TEXT NOT NULL,
     timestamp TIMESTAMP DEFAULT NOW(),
-    metadata JSONB DEFAULT '{}'::jsonb
+    message_metadata JSONB DEFAULT '{}'::jsonb
 );
 
 -- Create audit_logs table

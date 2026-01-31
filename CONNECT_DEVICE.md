@@ -92,3 +92,7 @@ curl -X POST http://localhost:8000/v1/commands/execute \
 "action": "run_command",
 "params": {"command": "say Hello from Jarvis"}
 }'
+
+curl -X POST http://localhost:8000/v1/conversations/chat \
+  -H "Content-Type: application/json" \
+  -d '{"speaker": "user", "content": "Which devices are online?"}'

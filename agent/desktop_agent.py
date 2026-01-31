@@ -85,6 +85,16 @@ class DesktopAgent:
                 # echo for testing
                 result_data = params
                 
+            elif action == "file_list":
+                from layers.skills.file_manager import FileManager
+                skill = FileManager()
+                # Pass action explicitly as it's expected by execute
+                params["action"] = "list_files"
+                result_data = await skill.execute(params)
+                if "error" in result_data:
+                    status = "error"
+                    error_msg = result_data["error"]
+                
             else:
                 status = "error"
                 error_msg = f"Unknown action: {action}"

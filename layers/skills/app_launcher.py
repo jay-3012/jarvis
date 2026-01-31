@@ -32,20 +32,41 @@ class AppLauncher(Skill):
         if not app_name:
             return "No application name provided."
 
-        command = self.APP_MAPPINGS.get(app_name, app_name)
+        logger.info(f"Launching app: {app_name}")
         
-        logger.info(f"Launching app: {app_name} -> {command}")
+        import sys
         
         try:
-            # os.startfile is Windows specific and very convenient as it acts like double-clicking
-            # But specific commands like 'code' might need shell=True via subprocess
-            if command.endswith(".exe") or app_name in self.APP_MAPPINGS:
-                 subprocess.Popen(command, shell=True)
+            if sys.platform == "darwin":
+                # macOS implementation
+                cmd = ["open"]
+                # Map common names if needed, otherwise just try the name
+                # Chrome example: "Google Chrome"
+                if app_name == "chrome":
+                    cmd.extend(["-a", "Google Chrome"])
+                elif app_name == "terminal":
+                    cmd.extend(["-a", "Terminal"])
+                elif app_name == "code":
+                    subprocess.Popen("code", shell=True) # VS Code usually in path
+                    return f"Opening {app_name}..."
+                else:
+                    cmd.extend(["-a", app_name])
+                    
+                subprocess.Popen(cmd)
+                return f"Opening {app_name} on Mac..."
+                
+            elif sys.platform == "win32":
+                # Windows implementation
+                command = self.APP_MAPPINGS.get(app_name, app_name)
+                
+                if command.endswith(".exe") or app_name in self.APP_MAPPINGS:
+                     subprocess.Popen(command, shell=True)
+                else:
+                     os.system(f"start {command}")
+                return f"Opening {app_name}..."
             else:
-                 # Try generic start
-                 os.system(f"start {command}")
-                 
-            return f"Opening {app_name}..."
+                return "Unsupported platform for AppLauncher."
+                
         except Exception as e:
             logger.error(f"Failed to launch {app_name}", error=str(e))
             return f"Failed to open {app_name}."

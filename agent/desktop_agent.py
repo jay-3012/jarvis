@@ -64,15 +64,34 @@ class DesktopAgent:
         logger.info("Command received", command_id=command_id, action=action)
         
         try:
-            # TODO: Implement actual command execution
-            # For now, just echo the command
-            result = {
-                "action": action,
-                "params": params,
-                "executed_at": datetime.utcnow().isoformat()
-            }
-            
-            await self.send_response(command_id, "success", data=result)
+            result_data = None
+            status = "success"
+            error_msg = None
+
+            # Route actions to Skills
+            if action == "open_app":
+                from layers.skills.app_launcher import AppLauncher
+                skill = AppLauncher()
+                msg = await skill.execute(params)
+                result_data = {"message": msg}
+                
+            elif action == "run_command":
+                from layers.skills.system_commander import SystemCommander
+                skill = SystemCommander()
+                msg = await skill.execute(params)
+                result_data = {"output": msg}
+                
+            elif action == "test_command":
+                # echo for testing
+                result_data = params
+                
+            else:
+                status = "error"
+                error_msg = f"Unknown action: {action}"
+                logger.warning(error_msg)
+
+            # Send response
+            await self.send_response(command_id, status, data=result_data, error=error_msg)
             
         except Exception as e:
             logger.error("Command execution failed", command_id=command_id, error=str(e))
@@ -135,8 +154,20 @@ class DesktopAgent:
 
 async def main():
     """Main entry point for desktop agent."""
+    # Load environment variables
+    from dotenv import load_dotenv
+    load_dotenv()
+
     device_id = os.getenv("DEVICE_ID", "windows-laptop")
-    server_url = os.getenv("CENTRAL_SERVER_URL", "ws://localhost:8000/ws")
+    
+    # Try to get full URL first
+    server_url = os.getenv("CENTRAL_SERVER_URL")
+    
+    # If not set, construct from host and port
+    if not server_url:
+        host = os.getenv("CENTRAL_SERVER_HOST", "localhost")
+        port = os.getenv("CENTRAL_SERVER_PORT", "8000")
+        server_url = f"ws://{host}:{port}/ws"
     
     agent = DesktopAgent(device_id, server_url)
     

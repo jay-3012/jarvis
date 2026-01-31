@@ -38,6 +38,27 @@ class ConversationResponse(BaseModel):
     message_count: int
 
 
+@router.post("/chat")
+async def chat_interaction(
+    request: MessageCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Process natural language input and return a response.
+    This bypasses the full conversation storage for now to focus on the interaction loop.
+    """
+    from server.services.conversation_manager import conversation_manager
+    
+    response = await conversation_manager.process_input(request.content)
+    
+    return {
+        "speaker": "assistant",
+        "content": response["text"],
+        "timestamp": datetime.utcnow().isoformat(),
+        "data": response.get("data")
+    }
+
+
 @router.post("", response_model=ConversationResponse)
 async def create_conversation(
     device_id: Optional[str] = None,

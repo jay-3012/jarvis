@@ -26,22 +26,53 @@ class LLMService:
         """
         Parse user intent from natural language input.
         
+        Supported Intents:
+        - get_online_devices: Query about connected/active devices
+        - file_search: Search for a file (params: filename, device_name)
+        - command_execution: General command execution
+        
         Returns:
             dict with 'intent', 'action', 'params'
         """
-        prompt = f"""Parse the following user command and extract the intent, action, and parameters.
-Respond in JSON format with keys: intent, action, params.
+        prompt = f"""You are the intent parser for the Jarvis system.
+Analyze the following User Command and extract the intent, specific action, and parameters.
 
-User command: "{user_input}"
+Supported Intents:
+1. get_online_devices
+   - Triggers: "which devices are online", "status report", "who is connected"
+   - Action: "list_devices"
+   - Params: None
 
-JSON response:"""
+2. file_search
+   - Triggers: "search for file.txt", "find report.pdf on mac", "where is my photo"
+   - Action: "search_file"
+   - Params: 
+     - filename (string): The name of the file
+     - device (string, optional): The target device name (e.g., "mac", "windows", "iphone")
+
+3. command_execution
+   - Triggers: "open chrome", "say hello"
+   - Action: <specific_action>
+   - Params: <action_params>
+
+Response Format (JSON only):
+{{
+  "intent": "<intent_name>",
+  "action": "<action_name>",
+  "params": {{ <extracted_parameters> }}
+}}
+
+User Command: "{user_input}"
+
+JSON Response:"""
         
         try:
-            response = generate(prompt, model=self.default_model)
+            response = await self.generate_response(prompt, model=self.default_model)
             if response:
                 # Try to parse JSON from response
                 import json
                 # Extract JSON from response (handle markdown code blocks)
+                json_str = response
                 if "```json" in response:
                     json_str = response.split("```json")[1].split("```")[0].strip()
                 elif "```" in response:

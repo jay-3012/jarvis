@@ -94,5 +94,58 @@ curl -X POST http://localhost:8000/v1/commands/execute \
 }'
 
 curl -X POST http://localhost:8000/v1/conversations/chat \
-  -H "Content-Type: application/json" \
-  -d '{"speaker": "user", "content": "Which devices are online?"}'
+ -H "Content-Type: application/json" \
+ -d '{"speaker": "user", "content": "Which devices are online?"}'
+
+---
+
+## Available Features (Second Device)
+
+Since this device is running the **Desktop Agent**, it can perform the following actions commanded by the Central Server:
+
+1.  **Open Applications** (`open_app`)
+    - **Mac**: Opens apps like Chrome, Terminal, VS Code.
+    - **Windows**: Opens standard executables.
+    - _Usage_: "Open Chrome on Mac" (via Voice or Text on Central).
+
+2.  **Execute System Commands** (`run_command`)
+    - Runs shell commands (bash/zsh on Mac, cmd on Windows).
+    - _Examples_: `say "Hello"`, `ls -la`, `mkdir project`.
+    - **Warning**: This gives full shell access, so be careful.
+
+3.  **File System Access** (`file_list`)
+    - Allows the Central Server to browse files on this device.
+    - Useful for unnecessary file indexing or remote management.
+
+---
+
+## How to Connect Mobile (Android/iOS)
+
+Currently, there is no dedicated native mobile app, but you can control Jarvis via the **Web Interface**.
+
+### 1. Connect to Wi-Fi
+
+Ensure your phone is on the **same Wi-Fi network** as the Central Server.
+
+### 2. Access the Control Panel (API)
+
+1.  Open Chrome/Safari on your phone.
+2.  Navigate to: `http://<CENTRAL_IP>:8000/docs`
+    - _Replace `<CENTRAL_IP>` with the IP from Step 1 (e.g., `192.168.1.5`)._
+3.  You will see the Swagger UI.
+
+### 3. Send Commands from Phone
+
+To send a voice command or text message to Jarvis/Central from your phone:
+
+1.  Scroll to **POST /v1/conversations/messages**.
+2.  Click **Try it out**.
+3.  Enter your message:
+    ```json
+    {
+      "speaker": "user",
+      "content": "Open Chrome on my Mac"
+    }
+    ```
+4.  Click **Execute**.
+    - _Jarvis will receive this text and route the command to your Mac Agent._

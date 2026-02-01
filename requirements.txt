@@ -36,3 +36,7 @@ passlib[bcrypt]==1.7.4
 # Utilities
 pydantic-settings==2.1.0
 httpx==0.25.2
+
+# Cognitive Layer
+chromadb==0.4.22
+networkx==3.2.1
